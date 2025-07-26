@@ -1,23 +1,20 @@
 #include <iostream>
 #include <vector>
 #include <string>
-#include <algorithm> // Required for std::max and std::min
+#include <algorithm>
 
-// --- Core Graphics Libraries ---
-#define GLEW_STATIC 1 // Required for static linking on some systems
-#include <GL/glew.h>  // Include GLEW - OpenGL Extension Wrangler
+#define GLEW_STATIC 1
+#include <GL/glew.h>
 
-#include <GLFW/glfw3.h> // GLFW provides a cross-platform interface for creating a graphical context,
-                        // initializing OpenGL and binding inputs
+#include <GLFW/glfw3.h>
 
-#include <glm/glm.hpp>  // GLM is an optimized math library with syntax to similar to OpenGL Shading Language
-#include <glm/gtc/matrix_transform.hpp> // include this to create transformation matrices
-#include <glm/gtc/type_ptr.hpp> // Required for glm::value_ptr
-#include <glm/common.hpp> // For glm::radians
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/common.hpp>
 
-// --- Image Loading (stb_image.h) ---
-#define STB_IMAGE_IMPLEMENTATION // Only define once in your project
-#include "stb/stb_image.h" // Corrected path for stb_image.h
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
 
 using namespace glm;
 using namespace std;
@@ -26,18 +23,17 @@ using namespace std;
 const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
-// Camera parameters (matching Lab 6 style)
-vec3 cameraPosition(0.0f, 0.0f, 3.0f); // Start slightly back to see the skybox
-vec3 cameraLookAt(0.0f, 0.0f, -1.0f); // Initial view direction
-vec3 cameraUp(0.0f, 1.0f, 0.0f);      // World up direction
+vec3 cameraPosition(0.0f, 0.0f, 3.0f);
+vec3 cameraLookAt(0.0f, 0.0f, -1.0f);
+vec3 cameraUp(0.0f, 1.0f, 0.0f);
 
-float cameraSpeed = 5.0f;           // Base camera movement speed (adjust as needed)
-float cameraFastSpeed = 2 * cameraSpeed; // Faster speed for shift key
-float cameraHorizontalAngle = 90.0f; // Initial yaw (looking along -Z, 90 deg for X-axis)
-float cameraVerticalAngle = 0.0f;    // Initial pitch
+float cameraSpeed = 5.0f;
+float cameraFastSpeed = 2 * cameraSpeed;
+float cameraHorizontalAngle = 90.0f;
+float cameraVerticalAngle = 0.0f;
 
-float lastFrameTime = 0.0f;          // For delta time calculation
-double lastMousePosX, lastMousePosY; // For mouse look
+float lastFrameTime = 0.0f;
+double lastMousePosX, lastMousePosY;
 
 // --- Function Prototypes ---
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -47,7 +43,7 @@ unsigned int createShaderProgram(const char* vertexSource, const char* fragmentS
 unsigned int loadCubeMapTexture(std::vector<std::string> faces);
 void renderSky(mat4 projection, mat4 view, unsigned int skyboxShaderProgram, unsigned int skyboxVAO, unsigned int cubemapTexture);
 
-// Shaders as C-style strings (similar to your getVertexShaderSource/getFragmentShaderSource)
+// Shaders
 const char* skyboxVertexShaderSource = R"(
     #version 330 core
     layout (location = 0) in vec3 aPos;
@@ -60,7 +56,7 @@ const char* skyboxVertexShaderSource = R"(
     void main()
     {
         TexCoords = aPos;
-        // Remove translation from the view matrix
+        // Remove translation from the view matrix to keep skybox fixed
         vec4 pos = projection * view * vec4(aPos, 1.0);
         gl_Position = pos.xyww; // Force z to w to ensure it's always at max depth (background)
     }
@@ -83,22 +79,19 @@ const char* skyboxFragmentShaderSource = R"(
 
 int main(int argc, char*argv[])
 {
-    // Initialize GLFW and OpenGL version
     glfwInit();
-    
-#if defined(__APPLE__) // For macOS, using __APPLE__ as platform check
+
+#if defined(__APPLE__)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3); // Changed from 2.1 to 3.3 for core profile
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #else
-    // For Windows/Linux, stick to 3.3 core profile as well for consistency with modern GL practices
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #endif
 
-    // Create Window and rendering context using GLFW
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Comp371 - Skybox Project", NULL, NULL);
     if (window == NULL)
     {
@@ -108,13 +101,10 @@ int main(int argc, char*argv[])
     }
     glfwMakeContextCurrent(window);
 
-    // Set up Callbacks
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-    // Hide and capture the mouse cursor
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    
-    // Initialize GLEW
-    glewExperimental = true; // Needed for core profile
+
+    glewExperimental = true;
     if (glewInit() != GLEW_OK) {
         std::cerr << "Failed to create GLEW" << std::endl;
         glfwTerminate();
@@ -123,18 +113,15 @@ int main(int argc, char*argv[])
     glGetError(); // Clear any potential error from glewInit()
 
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
-    
-    // Black background (will be covered by skybox)
+
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    
-    // Enable Depth Testing
+
     glEnable(GL_DEPTH_TEST);
 
-    // Compile and link shaders
     unsigned int skyboxShaderProgram = createShaderProgram(skyboxVertexShaderSource, skyboxFragmentShaderSource);
     glUseProgram(skyboxShaderProgram);
-    glUniform1i(glGetUniformLocation(skyboxShaderProgram, "skybox"), 0); // Assign texture unit 0
-    
+    glUniform1i(glGetUniformLocation(skyboxShaderProgram, "skybox"), 0);
+
     // --- Skybox Specific Setup ---
     float skyboxVertices[] = {
         // positions
@@ -190,7 +177,7 @@ int main(int argc, char*argv[])
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
 
-    // Load cubemap textures - Corrected path
+    // Load cubemap textures
     std::vector<std::string> faces = {
         // Order: Right, Left, Top, Bottom, Front, Back
         "Textures/skybox/right.png",  // GL_TEXTURE_CUBE_MAP_POSITIVE_X
@@ -205,90 +192,79 @@ int main(int argc, char*argv[])
     // Get initial mouse position to avoid a jump when the program starts
     glfwGetCursorPos(window, &lastMousePosX, &lastMousePosY);
 
-    // Entering Main Loop
     while(!glfwWindowShouldClose(window))
     {
-        // Frame time calculation
         float dt = static_cast<float>(glfwGetTime()) - lastFrameTime;
         lastFrameTime += dt;
 
-        // Each frame, reset color of each pixel to glClearColor
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
- 
-        // --- Camera Input Handling (Lab 6 style) ---
-        // Mouse look
+
+        // --- Camera Input Handling ---
         double mousePosX, mousePosY;
         glfwGetCursorPos(window, &mousePosX, &mousePosY);
-        
+
         double dx = mousePosX - lastMousePosX;
         double dy = mousePosY - lastMousePosY;
-        
+
         lastMousePosX = mousePosX;
         lastMousePosY = mousePosY;
 
         const float cameraAngularSpeed = 5.0f; // degrees per second
         cameraHorizontalAngle -= static_cast<float>(dx) * cameraAngularSpeed * dt;
         cameraVerticalAngle   -= static_cast<float>(dy) * cameraAngularSpeed * dt;
-        
+
         // Clamp vertical angle to [-85, 85] degrees to prevent camera flip
         cameraVerticalAngle = std::max(-85.0f, std::min(85.0f, cameraVerticalAngle));
-        
+
         // Update cameraLookAt vector from angles (spherical coordinates)
         float theta = glm::radians(cameraHorizontalAngle);
         float phi = glm::radians(cameraVerticalAngle);
-        
+
         cameraLookAt = vec3(cosf(phi)*cosf(theta), sinf(phi), -cosf(phi)*sinf(theta));
         // Calculate cameraSideVector for strafing
         vec3 cameraSideVector = glm::normalize(glm::cross(cameraLookAt, cameraUp)); // Normalize to ensure consistent speed
-        
-        // Keyboard movement
+
         bool fastCam = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS;
         float currentCameraSpeed = (fastCam) ? cameraFastSpeed : cameraSpeed;
-        
+
         if (glfwGetKey(window, GLFW_KEY_W ) == GLFW_PRESS)
         {
             cameraPosition += cameraLookAt * dt * currentCameraSpeed;
         }
-        
+
         if (glfwGetKey(window, GLFW_KEY_S ) == GLFW_PRESS)
         {
             cameraPosition -= cameraLookAt * dt * currentCameraSpeed;
         }
-        
+
         if (glfwGetKey(window, GLFW_KEY_D ) == GLFW_PRESS)
         {
             cameraPosition += cameraSideVector * dt * currentCameraSpeed;
         }
-        
+
         if (glfwGetKey(window, GLFW_KEY_A ) == GLFW_PRESS)
         {
             cameraPosition -= cameraSideVector * dt * currentCameraSpeed;
         }
 
-        // Add explicit up/down movement if desired (Space/Ctrl in your example)
         if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) // Move up
             cameraPosition += cameraUp * dt * currentCameraSpeed;
-        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) // Move down (using Ctrl as it's common)
+        if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS) // Move down
             cameraPosition -= cameraUp * dt * currentCameraSpeed;
 
-        // Exit on Escape key
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
             glfwSetWindowShouldClose(window, true);
 
         // --- Render Loop ---
-        // Calculate view and projection matrices
-        mat4 projection = glm::perspective(glm::radians(70.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.01f, 1000.0f); // Using 70 deg FOV from your example
+        mat4 projection = glm::perspective(glm::radians(70.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.01f, 1000.0f);
         mat4 view = lookAt(cameraPosition, cameraPosition + cameraLookAt, cameraUp);
-        
-        // Render the skybox
+
         renderSky(projection, view, skyboxShaderProgram, skyboxVAO, cubemapTexture);
 
-        // End Frame
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // 9. Terminate GLFW and clean up resources
     glDeleteVertexArrays(1, &skyboxVAO);
     glDeleteBuffers(1, &skyboxVBO);
     glDeleteProgram(skyboxShaderProgram);
@@ -298,9 +274,8 @@ int main(int argc, char*argv[])
     return 0;
 }
 
-// --- Function Implementations (from previous solution, adapted for this context) ---
+// --- Function Implementations ---
 
-// Callback for window resizing
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     glViewport(0, 0, width, height);
@@ -395,7 +370,6 @@ unsigned int loadCubeMapTexture(std::vector<std::string> faces)
     return textureID;
 }
 
-// Render the skybox
 void renderSky(mat4 projection, mat4 view, unsigned int skyboxShaderProgram, unsigned int skyboxVAO, unsigned int cubemapTexture)
 {
     glDepthFunc(GL_LEQUAL); // Change depth function so depth test passes when values are equal to depth buffer's content
